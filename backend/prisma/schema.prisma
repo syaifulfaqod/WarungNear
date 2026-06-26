@@ -1,0 +1,225 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  OWNER
+  ADMIN
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(CUSTOMER)
+  stores        Store[]
+  orders        Order[]        @relation("CustomerOrders")
+  conversations Conversation[] @relation("CustomerConversations")
+  sentMessages  Message[]      @relation("SenderMessages")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscription  Subscription?
+  subscriptionHistories SubscriptionHistory[]
+}
+
+model Store {
+  id            Int            @id @default(autoincrement())
+  name          String
+  address       String
+  latitude      Float
+  longitude     Float
+  open_time     String         @default("07:00")
+  close_time    String         @default("22:00")
+  phoneNumber   String?
+  isActive      Boolean        @default(true)
+  owner_id      Int
+  owner         User           @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  products      Product[]
+  transactions  Transaction[]
+  orders        Order[]
+  categories    Category[]
+  conversations Conversation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([latitude, longitude])
+}
+
+model Product {
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  category           String
+  category_id        Int?
+  categoryRelation   Category?           @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  price              Float
+  stock              Int
+  image              String?
+  store_id           Int
+  store              Store               @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  transactionDetails TransactionDetail[]
+  orderItems         OrderItem[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([name])
+  @@index([store_id, name])
+}
+
+model Transaction {
+  id         Int                 @id @default(autoincrement())
+  total      Float
+  created_at DateTime            @default(now())
+  store_id   Int
+  store      Store               @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  details    TransactionDetail[]
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+}
+
+model TransactionDetail {
+  id             Int         @id @default(autoincrement())
+  transaction_id Int
+  transaction    Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  product_id     Int
+  product        Product     @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  quantity       Int
+  price          Float
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  READY
+  COMPLETED
+}
+
+model Order {
+  id            Int            @id @default(autoincrement())
+  customer_id   Int
+  customer      User           @relation("CustomerOrders", fields: [customer_id], references: [id], onDelete: Cascade)
+  store_id      Int
+  store         Store          @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  status        OrderStatus    @default(PENDING)
+  total         Float
+  items         OrderItem[]
+  conversations Conversation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model OrderItem {
+  id         Int     @id @default(autoincrement())
+  order_id   Int
+  order      Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product_id Int
+  product    Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  quantity   Int
+  price      Float   // Price snapshot at checkout
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  store_id  Int
+  store     Store     @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([store_id, name])
+}
+
+model Conversation {
+  id          Int       @id @default(autoincrement())
+  customer_id Int
+  customer    User      @relation("CustomerConversations", fields: [customer_id], references: [id], onDelete: Cascade)
+  store_id    Int
+  store       Store     @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  order_id    Int?
+  order       Order?    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  messages    Message[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([customer_id, store_id])
+}
+
+model Message {
+  id              Int          @id @default(autoincrement())
+  conversation_id Int
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender_id       Int
+  sender          User         @relation("SenderMessages", fields: [sender_id], references: [id], onDelete: Cascade)
+  message         String
+  createdAt       DateTime     @default(now())
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  PENDING
+  ACTIVE
+  EXPIRED
+}
+
+enum SubscriptionDuration {
+  MONTHLY
+  YEARLY
+  PERMANENT
+}
+
+model SubscriptionPlan {
+  id            Int                  @id @default(autoincrement())
+  name          String
+  duration_type SubscriptionDuration
+  duration_days Int?
+  price         Float
+  description   String
+  is_active     Boolean              @default(true)
+  subscriptions Subscription[]
+  subscriptionHistories SubscriptionHistory[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model Subscription {
+  id                  Int                @id @default(autoincrement())
+  owner_id            Int                @unique
+  owner               User               @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  status              SubscriptionStatus @default(TRIAL)
+  start_date          DateTime           @default(now())
+  trial_end_date      DateTime
+  expired_date        DateTime?
+  payment_proof_image String?
+  payment_date        DateTime?
+  verified_by         Int?
+  plan_id             Int?
+  plan                SubscriptionPlan?  @relation(fields: [plan_id], references: [id], onDelete: SetNull)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model SubscriptionHistory {
+  id                  Int                @id @default(autoincrement())
+  owner_id            Int
+  owner               User               @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  plan_id             Int
+  plan                SubscriptionPlan   @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  status              SubscriptionStatus
+  price               Float
+  payment_proof_image String?
+  payment_date        DateTime?
+  duration_days       Int?
+  expired_date_after  DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}

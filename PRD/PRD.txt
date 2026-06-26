@@ -1,0 +1,705 @@
+# PRODUCT REQUIREMENT DOCUMENT (PRD)
+
+# Project Name
+
+# WarungNear Frontend
+
+---
+
+# Product Overview
+
+WarungNear Frontend adalah aplikasi web berbasis React + Vite yang menjadi antarmuka utama untuk pelanggan dan pemilik toko.
+
+Frontend ini berfungsi sebagai penghubung antara pengguna dengan sistem backend Node.js melalui REST API.
+
+Sistem frontend memiliki dua area utama:
+
+1. Customer Website
+2. Owner Dashboard POS
+
+Customer dapat mencari barang berdasarkan lokasi terdekat, melihat stok, harga, dan informasi toko.
+
+Owner dapat mengakses dashboard POS untuk mengelola produk, stok, dan transaksi.
+
+---
+
+# Technology Stack
+
+## Frontend
+
+Framework:
+
+React.js
+
+Build Tool:
+
+Vite
+
+Language:
+
+JavaScript / TypeScript
+
+Styling:
+
+Tailwind CSS
+
+Routing:
+
+React Router DOM
+
+State Management:
+
+Context API / Zustand
+
+API Communication:
+
+Axios
+
+Map:
+
+Leaflet + OpenStreetMap
+
+Authentication:
+
+JWT Token
+
+---
+
+# Frontend Architecture
+
+src/
+
+```
+src
+│
+├── assets
+│
+├── components
+│   ├── Navbar
+│   ├── Footer
+│   ├── ProductCard
+│   ├── StoreCard
+│   ├── MapView
+│   ├── SearchBar
+│   └── Loading
+│
+├── pages
+│   ├── Home
+│   ├── SearchResult
+│   ├── StoreDetail
+│   ├── Login
+│   ├── Register
+│   │
+│   └── Dashboard
+│       ├── Overview
+│       ├── Products
+│       ├── Inventory
+│       └── Transactions
+│
+├── services
+│   └── api.js
+│
+├── hooks
+│
+├── context
+│
+├── routes
+│
+└── App.jsx
+```
+
+---
+
+# User Roles
+
+Frontend memiliki 3 role:
+
+## Customer
+
+Akses:
+
+* Home
+* Search barang
+* Detail toko
+* Map
+
+## Owner
+
+Akses:
+
+* Dashboard POS
+* Produk
+* Inventory
+* Transaksi
+
+## Admin
+
+Akses:
+
+* Monitoring sistem
+
+---
+
+# CUSTOMER FRONTEND
+
+# 1. Landing Page
+
+Tujuan:
+
+Memberikan informasi utama WarungNear.
+
+Komponen:
+
+Navbar:
+
+* Logo WarungNear
+* Search
+* Login
+
+Hero Section:
+
+Text:
+
+"Cari barang terdekat dengan stok yang tersedia"
+
+Button:
+
+Mulai Cari
+
+---
+
+# 2. Product Search Page
+
+URL:
+
+```
+/search
+```
+
+Fitur:
+
+Search input:
+
+Contoh:
+
+"Indomie Goreng"
+
+Ketika user mengetik:
+
+Frontend mengirim request:
+
+GET
+
+/api/products/search?q=indomie
+
+Menampilkan:
+
+Product Card
+
+Isi:
+
+* Foto produk
+* Nama barang
+* Harga
+* Stok
+* Nama toko
+* Jarak toko
+
+---
+
+# 3. Location Permission
+
+Frontend meminta:
+
+"Allow location"
+
+Menggunakan:
+
+Browser Geolocation API
+
+Data:
+
+latitude
+
+longitude
+
+Contoh:
+
+```
+-7.12345
+112.12345
+```
+
+Dikirim ke backend:
+
+```
+GET
+/api/stores/nearby
+```
+
+---
+
+# 4. Nearby Store Result
+
+Tampilan:
+
+Store Card:
+
+Nama toko
+
+Alamat
+
+Jarak
+
+Stok tersedia
+
+Harga
+
+Button:
+
+"Lihat Lokasi"
+
+---
+
+# 5. Map Page
+
+URL:
+
+```
+/map
+```
+
+Menampilkan:
+
+Marker User
+
+Marker Toko
+
+Menggunakan:
+
+Leaflet Map
+
+---
+
+# 6. Store Detail Page
+
+URL:
+
+```
+/store/:id
+```
+
+Menampilkan:
+
+Informasi toko:
+
+* Nama toko
+* Foto
+* Alamat
+* Jam buka
+
+Produk:
+
+* Nama produk
+* Harga
+* Stok
+
+---
+
+# OWNER DASHBOARD FRONTEND
+
+# 1. Login Owner
+
+URL:
+
+```
+/login
+```
+
+Input:
+
+Email
+
+Password
+
+API:
+
+POST
+
+/api/auth/login
+
+Response:
+
+JWT Token
+
+Disimpan:
+
+localStorage
+
+---
+
+# 2. Dashboard Overview
+
+URL:
+
+```
+/dashboard
+```
+
+Menampilkan:
+
+Card Statistik:
+
+Total Produk
+
+Jumlah Transaksi
+
+Pendapatan
+
+Stok Menipis
+
+---
+
+# 3. Product Management
+
+URL:
+
+```
+/dashboard/products
+```
+
+Fitur:
+
+Table produk:
+
+Kolom:
+
+Foto
+
+Nama
+
+Kategori
+
+Harga
+
+Stok
+
+Action
+
+Action:
+
+Tambah
+
+Edit
+
+Hapus
+
+---
+
+# 4. Add Product Form
+
+Input:
+
+Nama produk
+
+Kategori
+
+Harga
+
+Stok
+
+Foto
+
+Submit:
+
+POST
+
+/api/products
+
+---
+
+# 5. Inventory Page
+
+URL:
+
+```
+/dashboard/inventory
+```
+
+Menampilkan:
+
+Daftar stok:
+
+Produk
+
+Stok sekarang
+
+Status
+
+Status:
+
+Aman
+
+Hampir habis
+
+Habis
+
+---
+
+# 6. Transaction Page
+
+URL:
+
+```
+/dashboard/transaction
+```
+
+Menampilkan:
+
+Riwayat transaksi:
+
+ID transaksi
+
+Tanggal
+
+Produk
+
+Total
+
+---
+
+# Component Requirements
+
+## Navbar Component
+
+Reusable.
+
+Props:
+
+user
+
+role
+
+menu
+
+---
+
+## ProductCard
+
+Props:
+
+productName
+
+image
+
+price
+
+stock
+
+---
+
+## StoreCard
+
+Props:
+
+storeName
+
+distance
+
+address
+
+---
+
+## MapView
+
+Props:
+
+latitude
+
+longitude
+
+markers
+
+---
+
+# API Integration
+
+Base URL:
+
+```
+http://localhost:5000/api
+```
+
+Example:
+
+Get Products:
+
+GET
+
+/products
+
+Response:
+
+```json
+[
+ {
+  "name":"Indomie",
+  "stock":20,
+  "price":3000
+ }
+]
+```
+
+---
+
+# Authentication Flow
+
+Login:
+
+User input
+
+↓
+
+API Login
+
+↓
+
+Receive JWT
+
+↓
+
+Save Token
+
+↓
+
+Redirect Dashboard
+
+---
+
+# Protected Route
+
+Owner page hanya dapat diakses:
+
+Jika:
+
+Token tersedia
+
+Role = owner
+
+Jika tidak:
+
+Redirect login
+
+---
+
+# UI/UX Requirement
+
+Design Style:
+
+Modern
+
+Simple
+
+Clean
+
+Reference:
+
+Marketplace + POS Dashboard
+
+---
+
+# Responsive Requirement
+
+Support:
+
+Desktop
+
+Tablet
+
+Mobile
+
+Breakpoint:
+
+Mobile:
+
+<768px
+
+Tablet:
+
+768-1024px
+
+Desktop:
+
+> 1024px
+
+---
+
+# Loading State
+
+Semua request API memiliki:
+
+Loading indicator
+
+---
+
+# Error Handling
+
+Jika API gagal:
+
+Tampilkan:
+
+"Data tidak tersedia"
+
+atau
+
+"Coba lagi"
+
+---
+
+# Frontend Development Priority
+
+Phase 1:
+
+Setup React + Vite
+
+Setup Routing
+
+Setup UI Component
+
+Phase 2:
+
+Customer page
+
+Search
+
+Location
+
+Map
+
+Phase 3:
+
+Owner Dashboard
+
+CRUD Product
+
+Inventory
+
+Phase 4:
+
+API Integration
+
+Authentication
+
+Testing
+
+---
+
+# Final Frontend Goal
+
+Membangun frontend WarungNear yang memiliki pengalaman seperti gabungan:
+
+* Google Maps untuk lokasi
+* Marketplace untuk pencarian barang
+* POS Dashboard untuk pemilik toko
+
+dengan React + Vite sebagai teknologi utama dan Node.js sebagai backend service.
