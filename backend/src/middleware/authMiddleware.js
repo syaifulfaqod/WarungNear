@@ -18,11 +18,16 @@ export const authMiddleware = async (req, res, next) => {
     
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, role: true }
+      select: { id: true, name: true, email: true, role: true, status: true, is_active: true, suspend_reason: true }
     });
     
     if (!user) {
       return res.status(401).json(formatResponse(false, "Not authorized, user not found"));
+    }
+
+    if (user.status === 'SUSPENDED' || !user.is_active) {
+      const msg = user.suspend_reason || "Akun Anda telah dinonaktifkan oleh Admin WarungNear. Silakan hubungi admin untuk informasi lebih lanjut.";
+      return res.status(403).json(formatResponse(false, msg));
     }
     
     req.user = user;

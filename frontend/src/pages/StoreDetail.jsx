@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, Clock, ArrowLeft } from 'lucide-react';
+import { MapPin, Clock, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { storeService } from '../services/storeService';
 import { productService } from '../services/productService';
 import ProductGrid from '../components/ProductGrid';
@@ -18,9 +18,48 @@ const StoreDetail = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
   
   const { user } = useAuthStore();
   const { userLocation } = useSearchStore();
+
+  const sortedImages = useMemo(() => {
+    if (!store || !store.images || store.images.length === 0) return [];
+    return [...store.images].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+  }, [store]);
+
+  const scrollContainerRef = useRef(null);
+
+  const handleScroll = (e) => {
+    const container = e.target;
+    const width = container.offsetWidth;
+    const scrollLeft = container.scrollLeft;
+    const index = Math.round(scrollLeft / width);
+    setActiveIndex(index);
+  };
+
+  const scrollToIndex = (index) => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const width = container.offsetWidth;
+    container.scrollTo({
+      left: index * width,
+      behavior: 'smooth'
+    });
+    setActiveIndex(index);
+  };
+
+  const handlePrev = () => {
+    if (sortedImages.length <= 1) return;
+    const newIndex = activeIndex === 0 ? sortedImages.length - 1 : activeIndex - 1;
+    scrollToIndex(newIndex);
+  };
+
+  const handleNext = () => {
+    if (sortedImages.length <= 1) return;
+    const newIndex = activeIndex === sortedImages.length - 1 ? 0 : activeIndex + 1;
+    scrollToIndex(newIndex);
+  };
 
   const formatWhatsAppNumber = (num) => {
     if (!num) return '';
@@ -121,10 +160,68 @@ const StoreDetail = () => {
 
       {/* Store Header Info */}
       <div className="bg-white rounded-xl shadow-sm border border-border overflow-hidden mb-8">
-        <div className="h-48 md:h-64 w-full relative">
-          <img src={store.image || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800'} alt={store.name} className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
-            <div className="p-6 text-white w-full">
+        <div className="h-48 md:h-80 w-full relative bg-gray-100">
+          {sortedImages.length > 0 ? (
+            <div className="w-full h-full relative">
+              <div 
+                ref={scrollContainerRef}
+                className="flex w-full h-full overflow-x-auto snap-x snap-mandatory scroll-smooth [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                onScroll={handleScroll}
+              >
+                {sortedImages.map((img, idx) => (
+                  <div key={img.id} className="w-full h-full flex-shrink-0 snap-start snap-always relative">
+                    <img 
+                      src={`${import.meta.env.VITE_API_URL.replace('/api', '')}${img.image_url}`} 
+                      alt={`${store.name} - Foto ${idx + 1}`} 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800';
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Navigation Arrows */}
+              {sortedImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/60 hover:bg-white text-gray-800 flex items-center justify-center shadow-sm hover:scale-105 transition-all cursor-pointer backdrop-blur-xs pointer-events-auto"
+                    aria-label="Foto Sebelumnya"
+                  >
+                    <ChevronLeft className="w-5.5 h-5.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/60 hover:bg-white text-gray-800 flex items-center justify-center shadow-sm hover:scale-105 transition-all cursor-pointer backdrop-blur-xs pointer-events-auto"
+                    aria-label="Foto Berikutnya"
+                  >
+                    <ChevronRight className="w-5.5 h-5.5" />
+                  </button>
+                </>
+              )}
+              
+              {/* Photo position indicator */}
+              {sortedImages.length > 1 && (
+                <div className="absolute bottom-4 right-4 bg-black/60 text-white text-xs font-bold px-3 py-1 rounded-full z-20 shadow-sm backdrop-blur-xs">
+                  {activeIndex + 1} / {sortedImages.length}
+                </div>
+              )}
+            </div>
+          ) : (
+            <img 
+              src={store.image || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800'} 
+              alt={store.name} 
+              className="w-full h-full object-cover" 
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end pointer-events-none">
+            <div className="p-6 text-white w-full pointer-events-auto">
               <h1 className="text-3xl font-bold mb-2">{store.name}</h1>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm items-center">
                 <div className="flex items-center">
@@ -162,6 +259,13 @@ const StoreDetail = () => {
                     Hubungi WhatsApp
                   </a>
                 )}
+                <button
+                  onClick={() => navigate(`/chat?storeId=${store.id}`)}
+                  className="inline-flex items-center gap-1.5 bg-primary hover:bg-green-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm cursor-pointer"
+                >
+                  <span className="w-3.5 h-3.5">💬</span>
+                  Chat Toko
+                </button>
               </div>
             </div>
           </div>

@@ -59,6 +59,20 @@ export const getConversations = async (req, res) => {
         return res.json(formatResponse(true, []));
       }
 
+      // Mark all customer messages in these stores' conversations as read
+      await prisma.message.updateMany({
+        where: {
+          conversation: {
+            store_id: { in: storeIds }
+          },
+          sender_id: { not: userId },
+          is_read: false
+        },
+        data: {
+          is_read: true
+        }
+      });
+
       conversations = await prisma.conversation.findMany({
         where: { store_id: { in: storeIds } },
         include: {
@@ -138,6 +152,33 @@ export const getMessages = async (req, res) => {
 
     if (userRole === 'OWNER' && conversation.store.owner_id !== userId) {
       return res.status(403).json(formatResponse(false, "Unauthorized access to this conversation"));
+    }
+
+    // Mark all customer messages in this conversation as read
+    if (userRole === 'OWNER') {
+      await prisma.message.updateMany({
+        where: {
+          conversation_id: conversationId,
+          sender_id: { not: userId },
+          is_read: false
+        },
+        data: {
+          is_read: true
+        }
+      });
+    }
+
+    if (userRole === 'CUSTOMER') {
+      await prisma.message.updateMany({
+        where: {
+          conversation_id: conversationId,
+          sender_id: { not: userId },
+          customer_is_read: false
+        },
+        data: {
+          customer_is_read: true
+        }
+      });
     }
 
     const messages = await prisma.message.findMany({
@@ -280,7 +321,9 @@ export const sendMessage = async (req, res) => {
       data: {
         conversation_id: conversation.id,
         sender_id: userId,
-        message: message.trim()
+        message: message.trim(),
+        is_read: userRole === 'OWNER',
+        customer_is_read: userRole === 'CUSTOMER'
       }
     });
 
@@ -303,6 +346,270 @@ export const sendMessage = async (req, res) => {
     res.json(formatResponse(true, newMessage));
   } catch (error) {
     console.error('sendMessage error:', error);
+    res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (userRole !== 'OWNER') {
+      return res.status(403).json(formatResponse(false, "Forbidden: Only owners can check unread counts"));
+    }
+
+    const stores = await prisma.store.findMany({
+      where: { owner_id: userId },
+      select: { id: true }
+    });
+
+    const storeIds = stores.map(s => s.id);
+
+    if (storeIds.length === 0) {
+      return res.json(formatResponse(true, { count: 0, unreadConversations: [] }));
+    }
+
+    // Count unread customer messages
+    const count = await prisma.message.count({
+      where: {
+        conversation: {
+          store_id: { in: storeIds }
+        },
+        is_read: false,
+        sender_id: { not: userId }
+      }
+    });
+
+    // Get list of unique customers who sent unread messages for the header dropdown
+    const unreadMessages = await prisma.message.findMany({
+      where: {
+        conversation: {
+          store_id: { in: storeIds }
+        },
+        is_read: false,
+        sender_id: { not: userId }
+      },
+      select: {
+        conversation: {
+          select: {
+            id: true,
+            customer: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      },
+      distinct: ['conversation_id']
+    });
+
+    const unreadConversations = unreadMessages.map(m => ({
+      id: m.conversation.id,
+      customerName: m.conversation.customer?.name || 'Customer'
+    }));
+
+    res.json(formatResponse(true, { count, unreadConversations }));
+  } catch (error) {
+    console.error('getUnreadCount error:', error);
+    res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+/**
+ * Get or create a conversation between Customer and Store
+ */
+export const getOrCreateConversation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { storeId, orderId, customerId } = req.query;
+
+    console.log('[DEBUG Backend Chat] getOrCreateConversation query:', {
+      userId,
+      userRole,
+      storeId,
+      orderId,
+      customerId
+    });
+
+    let sId = storeId ? parseInt(storeId) : null;
+    let oId = orderId ? parseInt(orderId) : null;
+    let cId = customerId ? parseInt(customerId) : null;
+
+    let conversation = null;
+
+    if (userRole === 'CUSTOMER') {
+      // Customer opening chat with a store (via storeId or orderId)
+      if (oId && !sId) {
+        // Fetch order to get storeId
+        const order = await prisma.order.findUnique({
+          where: { id: oId }
+        });
+        if (!order) {
+          return res.status(404).json(formatResponse(false, "Order tidak ditemukan"));
+        }
+        if (order.customer_id !== userId) {
+          return res.status(403).json(formatResponse(false, "Unauthorized"));
+        }
+        sId = order.store_id;
+      }
+
+      if (!sId) {
+        return res.status(400).json(formatResponse(false, "storeId atau orderId diperlukan"));
+      }
+
+      // Check if conversation exists
+      conversation = await prisma.conversation.findUnique({
+        where: {
+          customer_id_store_id: {
+            customer_id: userId,
+            store_id: sId
+          }
+        },
+        include: {
+          store: {
+            select: { id: true, name: true, address: true, phoneNumber: true }
+          },
+          order: {
+            select: { id: true, status: true, total: true }
+          },
+          messages: {
+            orderBy: { createdAt: 'asc' }
+          }
+        }
+      });
+
+      // If not, create it
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            customer_id: userId,
+            store_id: sId,
+            order_id: oId || null
+          },
+          include: {
+            store: {
+              select: { id: true, name: true, address: true, phoneNumber: true }
+            },
+            order: {
+              select: { id: true, status: true, total: true }
+            },
+            messages: true
+          }
+        });
+      }
+    } else if (userRole === 'OWNER') {
+      // Owner opening chat with a customer (via orderId or customerId)
+      // First, get the owner's store
+      const store = await prisma.store.findFirst({
+        where: { owner_id: userId }
+      });
+
+      if (!store) {
+        return res.status(404).json(formatResponse(false, "Toko Anda tidak ditemukan"));
+      }
+
+      sId = store.id;
+
+      if (oId && !cId) {
+        const order = await prisma.order.findUnique({
+          where: { id: oId }
+        });
+        if (!order) {
+          return res.status(404).json(formatResponse(false, "Order tidak ditemukan"));
+        }
+        if (order.store_id !== sId) {
+          return res.status(403).json(formatResponse(false, "Unauthorized: Order belongs to another store"));
+        }
+        cId = order.customer_id;
+      }
+
+      if (!cId) {
+        return res.status(400).json(formatResponse(false, "customerId atau orderId diperlukan"));
+      }
+
+      // Check if conversation exists
+      conversation = await prisma.conversation.findUnique({
+        where: {
+          customer_id_store_id: {
+            customer_id: cId,
+            store_id: sId
+          }
+        },
+        include: {
+          store: {
+            select: { id: true, name: true }
+          },
+          customer: {
+            select: { id: true, name: true, email: true }
+          },
+          order: {
+            select: { id: true, status: true, total: true }
+          },
+          messages: {
+            orderBy: { createdAt: 'asc' }
+          }
+        }
+      });
+
+      // If not, create it
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            customer_id: cId,
+            store_id: sId,
+            order_id: oId || null
+          },
+          include: {
+            store: {
+              select: { id: true, name: true }
+            },
+            customer: {
+              select: { id: true, name: true, email: true }
+            },
+            order: {
+              select: { id: true, status: true, total: true }
+            },
+            messages: true
+          }
+        });
+      }
+    } else {
+      return res.status(403).json(formatResponse(false, "Forbidden: Invalid role"));
+    }
+
+    res.json(formatResponse(true, conversation));
+  } catch (error) {
+    console.error('getOrCreateConversation error:', error);
+    res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+export const getCustomerUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (userRole !== 'CUSTOMER') {
+      return res.status(403).json(formatResponse(false, "Forbidden: Only customers can check customer unread counts"));
+    }
+
+    const count = await prisma.message.count({
+      where: {
+        conversation: {
+          customer_id: userId
+        },
+        sender_id: { not: userId },
+        customer_is_read: false
+      }
+    });
+
+    res.json(formatResponse(true, { unreadChatCount: count }));
+  } catch (error) {
+    console.error('getCustomerUnreadCount error:', error);
     res.status(500).json(formatResponse(false, "Server error"));
   }
 };

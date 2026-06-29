@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 're
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { storeService } from '../../services/storeService';
+import { storeImageService } from '../../services/storeImageService';
 import { Clock, Store } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -54,6 +55,11 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Store Images State
+  const [images, setImages] = useState([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Draggable marker handlers
   const markerRef = useRef(null);
@@ -118,6 +124,7 @@ const Settings = () => {
           setOpenTime(response.data.open_time || '07:00');
           setCloseTime(response.data.close_time || '22:00');
           setPhoneNumber(response.data.phoneNumber || '');
+          setImages(response.data.images || []);
         }
       } catch (err) {
         console.error(err);
@@ -127,6 +134,79 @@ const Settings = () => {
     };
     fetchStore();
   }, []);
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (images.length >= 3) {
+      toast.error('Maksimal upload 3 foto toko.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Ukuran file melebihi batas maksimal 5MB.');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const res = await storeImageService.uploadStoreImage(file);
+      if (res.success) {
+        setImages([...images, res.data]);
+        toast.success('Foto toko berhasil diunggah!');
+      } else {
+        toast.error(res.message || 'Gagal mengunggah foto toko');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghubungi server untuk mengunggah gambar');
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSetPrimary = async (imageId) => {
+    try {
+      const res = await storeImageService.setPrimaryStoreImage(imageId);
+      if (res.success) {
+        const updatedImages = images.map(img => ({
+          ...img,
+          is_primary: img.id === imageId
+        }));
+        setImages(updatedImages);
+        toast.success('Foto utama berhasil diubah!');
+      } else {
+        toast.error(res.message || 'Gagal mengubah foto utama');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghubungi server untuk mengubah foto utama');
+    }
+  };
+
+  const handleDeleteImage = async (imageId) => {
+    try {
+      const res = await storeImageService.deleteStoreImage(imageId);
+      if (res.success) {
+        const storeRes = await storeService.getOwnerStore();
+        if (storeRes.success && storeRes.data) {
+          setImages(storeRes.data.images || []);
+        } else {
+          setImages(images.filter(img => img.id !== imageId));
+        }
+        toast.success('Foto berhasil dihapus!');
+      } else {
+        toast.error(res.message || 'Gagal menghapus foto toko');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghubungi server untuk menghapus foto');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -351,6 +431,84 @@ const Settings = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="card bg-white p-6 rounded-xl border border-border">
+        <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+          <div className="flex items-center space-x-3">
+            <Store className="w-6 h-6 text-primary" />
+            <h2 className="text-lg font-bold text-text">Foto Toko</h2>
+          </div>
+          <span className="text-xs text-gray-500 font-semibold bg-gray-100 px-2.5 py-1 rounded-md">
+            {images.length} / 3 Foto
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {images.map((img) => (
+            <div key={img.id} className={`relative rounded-xl overflow-hidden border ${img.is_primary ? 'border-primary ring-2 ring-primary/20' : 'border-border'} group aspect-video sm:aspect-square bg-gray-55 flex flex-col`}>
+              <img 
+                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}${img.image_url}`} 
+                alt="Foto Toko" 
+                className="w-full h-full object-cover"
+              />
+              
+              <div className="absolute top-2 left-2">
+                {img.is_primary ? (
+                  <span className="bg-primary text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                    ⭐ Foto Utama
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSetPrimary(img.id)}
+                    className="bg-white/90 hover:bg-white text-gray-700 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm hover:text-primary transition-colors cursor-pointer"
+                  >
+                    Jadikan Utama
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleDeleteImage(img.id)}
+                className="absolute top-2 right-2 bg-red-500 hover:bg-red-650 text-white p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                title="Hapus Foto"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          ))}
+
+          {images.length < 3 && (
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 hover:border-primary rounded-xl aspect-video sm:aspect-square flex flex-col items-center justify-center cursor-pointer transition-colors p-4 group"
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                accept="image/jpeg,image/png,image/jpg,image/webp"
+                className="hidden"
+              />
+              {uploadingImage ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs text-gray-500 font-medium">Mengunggah...</span>
+                </div>
+              ) : (
+                <>
+                  <span className="text-2xl text-gray-400 group-hover:text-primary transition-colors">+</span>
+                  <span className="text-xs text-gray-500 font-semibold mt-1 group-hover:text-primary transition-colors">Tambah Foto</span>
+                  <span className="text-[10px] text-gray-400 mt-0.5">JPG, PNG, WEBP (Max 5MB)</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

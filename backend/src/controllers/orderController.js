@@ -1,7 +1,7 @@
 import prisma from '../config/db.js';
 import { orderCreateSchema } from '../utils/validators.js';
 import { formatResponse } from '../utils/response.js';
-import { emitStockUpdate, emitNewOrder, emitOrderUpdate } from '../socket/index.js';
+import { emitStockUpdate, emitNewOrder, emitOrderUpdate, emitOrderCancelled } from '../socket/index.js';
 
 /**
  * Create a new customer order
@@ -15,11 +15,35 @@ export const createOrder = async (req, res) => {
 
     // Check if store exists
     const store = await prisma.store.findUnique({
-      where: { id: store_id }
+      where: { id: store_id },
+      include: { 
+        owner: {
+          include: {
+            subscription: true
+          }
+        }
+      }
     });
 
     if (!store) {
       return res.status(404).json(formatResponse(false, "Store not found"));
+    }
+
+    // Verify if store owner is active/not suspended
+    if (store.owner.status === 'SUSPENDED' || !store.owner.is_active) {
+      return res.status(400).json(formatResponse(false, "Toko tidak dapat menerima pesanan karena akun pemilik dinonaktifkan oleh Admin."));
+    }
+
+    // Verify store owner subscription status
+    const now = new Date();
+    const sub = store.owner.subscription;
+    const isSubActive = sub && (
+      sub.status === 'ACTIVE' ||
+      (sub.status === 'TRIAL' && new Date(sub.trial_end_date) >= now)
+    );
+
+    if (!isSubActive) {
+      return res.status(400).json(formatResponse(false, "Toko tidak dapat menerima pesanan baru karena masa langganan aktif telah berakhir."));
     }
 
     // Verify if store is currently active/open
@@ -173,6 +197,17 @@ export const getOrders = async (req, res) => {
     const userRole = req.user.role;
 
     if (userRole === 'CUSTOMER') {
+      // Mark all unseen customer orders as seen
+      await prisma.order.updateMany({
+        where: {
+          customer_id: userId,
+          customer_is_seen: false
+        },
+        data: {
+          customer_is_seen: true
+        }
+      });
+
       const orders = await prisma.order.findMany({
         where: { customer_id: userId },
         include: {
@@ -203,6 +238,17 @@ export const getOrders = async (req, res) => {
       }
 
       const storeIds = stores.map(s => s.id);
+
+      // Mark all unseen orders of these stores as seen
+      await prisma.order.updateMany({
+        where: {
+          store_id: { in: storeIds },
+          is_seen: false
+        },
+        data: {
+          is_seen: true
+        }
+      });
 
       const orders = await prisma.order.findMany({
         where: {
@@ -288,7 +334,10 @@ export const updateOrderStatus = async (req, res) => {
     // Update status in DB
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
-      data: { status },
+      data: { 
+        status,
+        customer_is_seen: false
+      },
       include: {
         items: {
           include: {
@@ -308,6 +357,74 @@ export const updateOrderStatus = async (req, res) => {
 
     // Emit event to customer user room
     emitOrderUpdate(order.customer_id, updatedOrder);
+
+    // If order becomes READY, send automated system message in chat
+    if (status === 'READY') {
+      try {
+        const systemMessageKey = `[READY_NOTIFICATION_ORDER_${updatedOrder.id}]`;
+        const existingSystemMsg = await prisma.message.findFirst({
+          where: {
+            message: {
+              contains: systemMessageKey
+            }
+          }
+        });
+
+        if (!existingSystemMsg) {
+          // Find or create conversation
+          let conversation = await prisma.conversation.findUnique({
+            where: {
+              customer_id_store_id: {
+                customer_id: updatedOrder.customer_id,
+                store_id: updatedOrder.store_id
+              }
+            }
+          });
+
+          if (!conversation) {
+            conversation = await prisma.conversation.create({
+              data: {
+                customer_id: updatedOrder.customer_id,
+                store_id: updatedOrder.store_id,
+                order_id: updatedOrder.id
+              }
+            });
+          }
+
+          // Build item list detail
+          const itemDetails = updatedOrder.items.map(item => `- ${item.product.name} x${item.quantity}`).join('\n');
+
+          // Build message text (prefixed with systemMessageKey for uniqueness check)
+          const messageText = `${systemMessageKey}Halo ${updatedOrder.customer.name}, pesanan #ORD-${updatedOrder.id} dari ${updatedOrder.store.name} sudah siap diambil.\n\nDetail:\n${itemDetails}\n\nSilakan datang ke toko untuk mengambil pesanan Anda.\nTerima kasih.`;
+
+          // Create message
+          const systemMsg = await prisma.message.create({
+            data: {
+              conversation_id: conversation.id,
+              sender_id: userId,
+              message: messageText,
+              is_system: true,
+              latitude: updatedOrder.store.latitude,
+              longitude: updatedOrder.store.longitude,
+              is_read: false,
+              customer_is_read: false
+            }
+          });
+
+          // Update conversation timestamp
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() }
+          });
+
+          // Import and emit chat:message
+          const { emitChatMessage } = await import('../socket/index.js');
+          emitChatMessage(updatedOrder.store_id, updatedOrder.customer_id, systemMsg);
+        }
+      } catch (chatErr) {
+        console.error('Failed to send auto-ready message:', chatErr);
+      }
+    }
 
     res.json(formatResponse(true, updatedOrder));
   } catch (error) {
@@ -401,6 +518,258 @@ export const getStoreHistory = async (req, res) => {
     res.json(formatResponse(true, combinedHistory));
   } catch (error) {
     console.error('getStoreHistory error:', error);
+    res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (userRole !== 'OWNER') {
+      return res.status(403).json(formatResponse(false, "Forbidden: Only owners can check unread counts"));
+    }
+
+    const stores = await prisma.store.findMany({
+      where: { owner_id: userId },
+      select: { id: true }
+    });
+
+    const storeIds = stores.map(s => s.id);
+
+    if (storeIds.length === 0) {
+      return res.json(formatResponse(true, { count: 0, unreadOrders: [] }));
+    }
+
+    // Count unseen orders (PENDING status)
+    const count = await prisma.order.count({
+      where: {
+        store_id: { in: storeIds },
+        is_seen: false,
+        status: 'PENDING'
+      }
+    });
+
+    // Get list of unseen orders for the header dropdown
+    const unreadOrders = await prisma.order.findMany({
+      where: {
+        store_id: { in: storeIds },
+        is_seen: false,
+        status: 'PENDING'
+      },
+      select: {
+        id: true,
+        total: true,
+        createdAt: true,
+        customer: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(formatResponse(true, { count, unreadOrders }));
+  } catch (error) {
+    console.error('getUnreadCount error:', error);
+    res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+/**
+ * Cancel an order by CUSTOMER
+ */
+export const cancelOrderByCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const orderId = parseInt(id);
+
+    if (isNaN(orderId)) {
+      return res.status(400).json(formatResponse(false, "Invalid order ID"));
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json(formatResponse(false, "Order tidak ditemukan"));
+    }
+
+    if (order.customer_id !== userId) {
+      return res.status(403).json(formatResponse(false, "Anda tidak memiliki akses untuk membatalkan pesanan ini"));
+    }
+
+    // WAITING_CONFIRMATION or PENDING or anything similar
+    if (!['PENDING', 'WAITING_CONFIRMATION'].includes(order.status)) {
+      return res.status(400).json(formatResponse(false, "Pesanan tidak dapat dibatalkan karena sudah diproses atau selesai"));
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Restore stock
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.product_id },
+          data: {
+            stock: { increment: item.quantity }
+          }
+        });
+      }
+
+      // Update status
+      return await tx.order.update({
+        where: { id: orderId },
+        data: { status: 'CANCELLED' },
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, name: true, image: true } }
+            }
+          },
+          store: {
+            select: { id: true, name: true, owner_id: true }
+          },
+          customer: {
+            select: { id: true, name: true }
+          }
+        }
+      });
+    });
+
+    // Emit stock updates for each item
+    const refreshedItems = await prisma.orderItem.findMany({
+      where: { order_id: orderId },
+      include: {
+        product: { select: { id: true, stock: true } }
+      }
+    });
+    for (const item of refreshedItems) {
+      emitStockUpdate(item.product_id, item.product.stock);
+    }
+
+    emitOrderCancelled(updatedOrder.store_id, updatedOrder.customer_id, updatedOrder, 'CUSTOMER');
+
+    return res.json(formatResponse(true, updatedOrder));
+  } catch (error) {
+    console.error('cancelOrderByCustomer error:', error);
+    return res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+/**
+ * Cancel an order by OWNER
+ */
+export const cancelOrderByOwner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const orderId = parseInt(id);
+
+    if (isNaN(orderId)) {
+      return res.status(400).json(formatResponse(false, "Invalid order ID"));
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true,
+        store: {
+          select: { owner_id: true }
+        }
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json(formatResponse(false, "Order tidak ditemukan"));
+    }
+
+    if (order.store.owner_id !== userId) {
+      return res.status(403).json(formatResponse(false, "Anda tidak berwenang untuk membatalkan pesanan di toko ini"));
+    }
+
+    if (['COMPLETED', 'CANCELLED'].includes(order.status)) {
+      return res.status(400).json(formatResponse(false, "Pesanan sudah selesai atau sudah dibatalkan sebelumnya"));
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Restore stock
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.product_id },
+          data: {
+            stock: { increment: item.quantity }
+          }
+        });
+      }
+
+      // Update status
+      return await tx.order.update({
+        where: { id: orderId },
+        data: { 
+          status: 'CANCELLED',
+          customer_is_seen: false
+        },
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, name: true, image: true } }
+            }
+          },
+          store: {
+            select: { id: true, name: true, owner_id: true }
+          },
+          customer: {
+            select: { id: true, name: true }
+          }
+        }
+      });
+    });
+
+    // Emit stock updates for each item
+    const refreshedItems = await prisma.orderItem.findMany({
+      where: { order_id: orderId },
+      include: {
+        product: { select: { id: true, stock: true } }
+      }
+    });
+    for (const item of refreshedItems) {
+      emitStockUpdate(item.product_id, item.product.stock);
+    }
+
+    emitOrderCancelled(updatedOrder.store_id, updatedOrder.customer_id, updatedOrder, 'OWNER');
+
+    return res.json(formatResponse(true, updatedOrder));
+  } catch (error) {
+    console.error('cancelOrderByOwner error:', error);
+    return res.status(500).json(formatResponse(false, "Server error"));
+  }
+};
+
+export const getCustomerUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (userRole !== 'CUSTOMER') {
+      return res.status(403).json(formatResponse(false, "Forbidden: Only customers can check unread counts"));
+    }
+
+    const count = await prisma.order.count({
+      where: {
+        customer_id: userId,
+        customer_is_seen: false
+      }
+    });
+
+    res.json(formatResponse(true, { unreadOrderCount: count }));
+  } catch (error) {
+    console.error('getCustomerUnreadCount order error:', error);
     res.status(500).json(formatResponse(false, "Server error"));
   }
 };

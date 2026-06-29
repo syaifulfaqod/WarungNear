@@ -28,39 +28,18 @@ import Settings from '../pages/Dashboard/Settings';
 import Chat from '../pages/Dashboard/Chat';
 import Subscription from '../pages/Dashboard/Subscription';
 import SubscriptionManagement from '../pages/Dashboard/SubscriptionManagement';
+import useAuthStore from '../store/useAuthStore';
 
-// Admin Placeholders
-const AdminUsersPlaceholder = () => (
-  <div className="p-6 max-w-7xl mx-auto">
-    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm text-center">
-      <span className="text-5xl">👥</span>
-      <h2 className="text-xl font-bold text-gray-800 mt-4">Manajemen Pengguna</h2>
-      <p className="text-gray-400 text-sm mt-1">Halaman manajemen akun Customer dan Owner di platform WarungNear.</p>
-    </div>
-  </div>
-);
-
-const AdminStoresPlaceholder = () => (
-  <div className="p-6 max-w-7xl mx-auto">
-    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm text-center">
-      <span className="text-5xl">🏪</span>
-      <h2 className="text-xl font-bold text-gray-800 mt-4">Manajemen Toko</h2>
-      <p className="text-gray-400 text-sm mt-1">Daftar semua warung/toko kelontong yang terdaftar dan aktif di WarungNear.</p>
-    </div>
-  </div>
-);
-
-const AdminReportsPlaceholder = () => (
-  <div className="p-6 max-w-7xl mx-auto">
-    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm text-center">
-      <span className="text-5xl">📈</span>
-      <h2 className="text-xl font-bold text-gray-800 mt-4">Laporan Sistem</h2>
-      <p className="text-gray-400 text-sm mt-1">Statistik performa transaksi POS, pesanan online, dan total pendapatan langganan.</p>
-    </div>
-  </div>
-);
+// Admin Pages
+import AdminOverview from '../pages/Dashboard/AdminOverview';
+import AdminUsers from '../pages/Dashboard/AdminUsers';
+import AdminOwners from '../pages/Dashboard/AdminOwners';
+import AdminStores from '../pages/Dashboard/AdminStores';
+import AdminReports from '../pages/Dashboard/AdminReports';
 
 const AppRoutes = () => {
+  const role = useAuthStore(state => state.role);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -89,7 +68,10 @@ const AppRoutes = () => {
         {/* Dashboard Routes (Protected) */}
         <Route element={<ProtectedRoute allowedRoles={['owner', 'admin']} />}>
           <Route element={<DashboardLayout />}>
-            <Route path="/dashboard" element={<Overview />} />
+            <Route 
+              path="/dashboard" 
+              element={role?.toUpperCase() === 'ADMIN' ? <AdminOverview /> : <Overview />} 
+            />
             <Route path="/dashboard/products" element={<Products />} />
             <Route path="/dashboard/categories" element={<Categories />} />
             <Route path="/dashboard/sales-history" element={<SalesHistory />} />
@@ -100,9 +82,10 @@ const AppRoutes = () => {
             <Route path="/dashboard/settings" element={<Settings />} />
             <Route path="/dashboard/subscription" element={<Subscription />} />
             <Route path="/dashboard/admin/subscriptions" element={<SubscriptionManagement />} />
-            <Route path="/dashboard/users" element={<AdminUsersPlaceholder />} />
-            <Route path="/dashboard/stores" element={<AdminStoresPlaceholder />} />
-            <Route path="/dashboard/reports" element={<AdminReportsPlaceholder />} />
+            <Route path="/dashboard/users" element={<AdminUsers />} />
+            <Route path="/dashboard/owners" element={<AdminOwners />} />
+            <Route path="/dashboard/stores" element={<AdminStores />} />
+            <Route path="/dashboard/reports" element={<AdminReports />} />
           </Route>
         </Route>
       </Routes>

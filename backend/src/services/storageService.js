@@ -6,10 +6,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const uploadDir = path.join(__dirname, '../../uploads/products');
+const uploadStoresDir = path.join(__dirname, '../../uploads/stores');
 
-// Ensure upload directory exists on startup
+// Ensure upload directories exist on startup
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
+}
+if (!fs.existsSync(uploadStoresDir)) {
+  fs.mkdirSync(uploadStoresDir, { recursive: true });
 }
 
 export const storageService = {
@@ -45,6 +49,40 @@ export const storageService = {
       
       const filename = path.basename(imageUrl);
       const filePath = path.join(uploadDir, filename);
+      
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        return { success: true, message: 'Image deleted from disk' };
+      }
+      return { success: false, message: 'Image file does not exist on disk' };
+    } catch (error) {
+      console.error('Error deleting image from disk:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Process and save an uploaded store file.
+   */
+  uploadStoreImage: async (file) => {
+    if (!file) {
+      throw new Error("No file provided");
+    }
+    const imageUrl = `/uploads/stores/${file.filename}`;
+    return { success: true, imageUrl };
+  },
+
+  /**
+   * Delete a store image from storage.
+   */
+  deleteStoreImage: async (imageUrl) => {
+    try {
+      if (!imageUrl || !imageUrl.startsWith('/uploads/stores/')) {
+        return { success: false, message: 'Not a local store image path' };
+      }
+      
+      const filename = path.basename(imageUrl);
+      const filePath = path.join(uploadStoresDir, filename);
       
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);

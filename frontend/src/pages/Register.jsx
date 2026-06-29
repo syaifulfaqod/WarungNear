@@ -42,7 +42,7 @@ const Register = () => {
         
         setTimeout(() => {
           if (user.role.toUpperCase() === 'OWNER') {
-            navigate('/dashboard');
+            navigate('/dashboard/settings');
           } else {
             navigate('/');
           }

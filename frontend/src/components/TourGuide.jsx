@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Joyride, STATUS } from 'react-joyride';
+import { toast } from 'react-hot-toast';
 import useAuthStore from '../store/useAuthStore';
 import useTourStore from '../store/useTourStore';
 
@@ -8,87 +9,52 @@ const TourGuide = ({ role }) => {
   const { run, setRun } = useTourStore();
   const [activeSteps, setActiveSteps] = useState([]);
 
-  // Check if tour should run automatically on login
-  useEffect(() => {
-    if (!isAuthenticated || !user) {
-      setRun(false);
-      return;
-    }
-
-    const key = `tour_${role.toLowerCase()}_completed_${user.id}`;
-    const isCompleted = localStorage.getItem(key);
-
-    if (!isCompleted) {
-      // Delay to ensure components are rendered
-      const timer = setTimeout(() => {
-        setRun(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [isAuthenticated, user, role, setRun]);
-
   const handleJoyrideCallback = (data) => {
     const { status } = data;
     const finishedStatuses = [STATUS.FINISHED, STATUS.SKIPPED];
 
     if (finishedStatuses.includes(status)) {
-      if (user) {
-        const key = `tour_${role.toLowerCase()}_completed_${user.id}`;
-        localStorage.setItem(key, 'true');
-      }
       setRun(false);
-      console.log(`Tour onboarding completed for role: ${role}`);
+      toast.success("Panduan selesai, Anda dapat menjalankan kembali melalui tombol Panduan Website");
     }
   };
 
   const customerSteps = [
     {
-      target: '#tour-navbar',
-      title: '🧭 Navigasi Menu',
-      content: 'Gunakan menu navigasi ini untuk mencari toko, produk, chat, dan pesanan Anda.',
+      target: '#tour-search-link',
+      title: '🔍 Cara mencari toko',
+      content: 'Gunakan fitur pencarian untuk menemukan toko kelontong atau produk yang Anda butuhkan.',
       placement: 'bottom',
       disableBeacon: true,
     },
     {
-      target: '#tour-search-link',
-      title: '🔍 Cari Produk',
-      content: 'Gunakan fitur pencarian untuk menemukan barang yang Anda butuhkan.',
-      placement: 'bottom',
-    },
-    {
       target: '#tour-maps-link',
-      title: '📍 Toko Terdekat (Maps)',
-      content: 'Gunakan halaman maps untuk melihat toko terdekat berdasarkan lokasi Anda.',
+      title: '📍 Maps',
+      content: 'Gunakan halaman maps untuk melihat lokasi toko terdekat di sekitar Anda.',
       placement: 'bottom',
     },
     {
       target: '#tour-store-card',
-      title: '🏪 Toko Kelontong',
-      content: 'Klik toko untuk melihat detail toko, jam buka, lokasi, produk, dan kontak.',
+      title: '🏪 Produk',
+      content: 'Lihat produk-produk unggulan dari toko kelontong mitra kami.',
       placement: 'bottom',
     },
     {
       target: '#tour-cart-link',
-      title: '🛒 Keranjang Belanja',
-      content: 'Tambahkan barang ke keranjang sebelum melakukan checkout.',
-      placement: 'bottom',
-    },
-    {
-      target: '#tour-chat-link',
-      title: '💬 Chat Toko',
-      content: 'Gunakan fitur chat untuk bertanya kepada toko sebelum membeli.',
+      title: '🛒 Keranjang',
+      content: 'Kelola barang belanjaan Anda sebelum melakukan checkout.',
       placement: 'bottom',
     },
     {
       target: '#tour-orders-link',
-      title: '📦 Pesanan Saya',
-      content: 'Lihat status pesanan dan riwayat pembelian Anda di sini.',
+      title: '📦 Pesanan',
+      content: 'Lihat status pesanan dan riwayat transaksi Anda.',
       placement: 'bottom',
     },
     {
-      target: '#tour-profile-menu',
-      title: '👤 Profil Akun',
-      content: 'Kelola akun Anda melalui menu profile.',
+      target: '#tour-chat-link',
+      title: '💬 Chat toko',
+      content: 'Hubungi pemilik toko secara langsung untuk bertanya seputar produk.',
       placement: 'bottom',
     }
   ];
@@ -221,6 +187,7 @@ const TourGuide = ({ role }) => {
 
   return (
     <Joyride
+      key={`${role}-${run}`}
       callback={handleJoyrideCallback}
       continuous={true}
       run={run && activeSteps.length > 0}

@@ -2,6 +2,7 @@ import prisma from '../config/db.js';
 import { productCreateSchema, productUpdateSchema } from '../utils/validators.js';
 import { formatResponse } from '../utils/response.js';
 import { storageService } from '../services/storageService.js';
+import { checkAndUpdateSubscriptions } from '../utils/subscriptionChecker.js';
 
 export const getProducts = async (req, res) => {
   try {
@@ -25,9 +26,26 @@ export const getProducts = async (req, res) => {
     // 2. Otherwise (CUSTOMER or unauthenticated), return public products with optional filters
     const { keyword, category } = req.query;
     
+    // Auto-update expired subscriptions
+    await checkAndUpdateSubscriptions();
+
+    const now = new Date();
     let whereClause = {
       store: {
-        isActive: true
+        isActive: true,
+        owner: {
+          status: 'ACTIVE',
+          is_active: true,
+          subscription: {
+            OR: [
+              { status: 'ACTIVE' },
+              {
+                status: 'TRIAL',
+                trial_end_date: { gte: now }
+              }
+            ]
+          }
+        }
       }
     };
     
@@ -60,12 +78,51 @@ export const getProducts = async (req, res) => {
 export const getProductById = async (req, res) => {
   try {
     const product = await prisma.product.findUnique({
-      where: { id: parseInt(req.params.id) }
+      where: { id: parseInt(req.params.id) },
+      include: {
+        store: {
+          include: {
+            owner: {
+              include: {
+                subscription: true
+              }
+            }
+          }
+        }
+      }
     });
     
     if (!product) return res.status(404).json(formatResponse(false, "Product not found"));
     
-    res.json(formatResponse(true, product));
+    // Verify store owner status and subscription
+    const now = new Date();
+    const store = product.store;
+    const isOwnerActive = store.owner.status === 'ACTIVE' && store.owner.is_active;
+    const sub = store.owner.subscription;
+    const isSubActive = sub && (
+      sub.status === 'ACTIVE' ||
+      (sub.status === 'TRIAL' && new Date(sub.trial_end_date) >= now)
+    );
+
+    if (!store.isActive || !isOwnerActive || !isSubActive) {
+      return res.status(404).json(formatResponse(false, "Product not found"));
+    }
+
+    // Exclude store relation from payload to match original output schema
+    const formattedProduct = {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      category_id: product.category_id,
+      price: product.price,
+      stock: product.stock,
+      image: product.image,
+      store_id: product.store_id,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt
+    };
+
+    res.json(formatResponse(true, formattedProduct));
   } catch (error) {
     res.status(500).json(formatResponse(false, "Server error"));
   }

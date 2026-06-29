@@ -3,13 +3,19 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Send, Store, MessageSquare, Loader2, Search, ArrowLeft } from 'lucide-react';
 import useChatStore from '../store/useChatStore';
 import useAuthStore from '../store/useAuthStore';
+import useNotificationStore from '../store/useNotificationStore';
 import { storeService } from '../services/storeService';
+import { chatService } from '../services/chatService';
 import { toast } from 'react-hot-toast';
 
 const CustomerChat = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const storeIdParam = searchParams.get('storeId');
+
+  useEffect(() => {
+    useNotificationStore.getState().resetCustomerChatBadge();
+  }, []);
 
   const { user } = useAuthStore();
   const {
@@ -39,18 +45,12 @@ const CustomerChat = () => {
       if (storeIdParam) {
         try {
           const parsedStoreId = parseInt(storeIdParam);
-          // Try to find if there is an existing conversation with this store
-          const existing = useChatStore.getState().conversations.find(c => c.store_id === parsedStoreId);
-          if (existing) {
-            setActiveConversationId(existing.id);
+          const res = await chatService.getOrCreateConversation({ storeId: parsedStoreId });
+          if (res.success && res.data) {
+            await fetchConversations();
+            setActiveConversationId(res.data.id);
           } else {
-            // Find store details to get store name
-            const storeRes = await storeService.getStoreById(parsedStoreId);
-            if (storeRes.success) {
-              await openChatWithStore(parsedStoreId, storeRes.data.name);
-            } else {
-              toast.error('Toko tidak ditemukan');
-            }
+            toast.error(res.message || 'Toko tidak ditemukan');
           }
         } catch (e) {
           console.error('Error initializing store chat:', e);
@@ -160,7 +160,8 @@ const CustomerChat = () => {
             ) : (
               filteredConversations.map(conv => {
                 const isActive = conv.id === activeConversationId;
-                const lastMsg = conv.messages?.[0]?.message || 'Mulai obrolan...';
+                const rawLastMsg = conv.messages?.[0]?.message || 'Mulai obrolan...';
+                const lastMsg = rawLastMsg.replace(/^\[READY_NOTIFICATION_ORDER_\d+\]/, '');
                 const lastTime = conv.messages?.[0]?.createdAt
                   ? new Date(conv.messages[0].createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
                   : '';
@@ -215,11 +216,42 @@ const CustomerChat = () => {
               {/* Message History */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
                 {messages.map(msg => {
+                  const cleanText = msg.message.replace(/^\[READY_NOTIFICATION_ORDER_\d+\]/, '');
+
+                  if (msg.is_system) {
+                    return (
+                      <div key={msg.id} className="flex justify-center my-4">
+                        <div className="bg-[#EFF6FF] border border-[#BFDBFE] text-[#1E3A8A] rounded-2xl p-4 max-w-[85%] text-xs shadow-3xs flex flex-col gap-3 relative">
+                          <div className="flex gap-2.5 items-start">
+                            <span className="text-sm shrink-0">ℹ️</span>
+                            <div className="space-y-1">
+                              <span className="font-extrabold text-[10px] text-[#2563EB] tracking-wider uppercase block">Pesan Otomatis Sistem</span>
+                              <p className="whitespace-pre-wrap leading-relaxed font-semibold text-[#1E3A8A]">{cleanText}</p>
+                            </div>
+                          </div>
+                          {msg.latitude && msg.longitude && (
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${msg.latitude},${msg.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-center py-2 px-4 rounded-xl font-bold transition-all shadow-3xs hover:shadow-xs flex items-center justify-center gap-1.5 cursor-pointer no-underline"
+                            >
+                              📍 Navigasi ke Toko
+                            </a>
+                          )}
+                          <span className="block text-[8px] text-right text-[#60A5FA] font-bold mt-1">
+                            {new Date(msg.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   const isOwn = msg.sender_id === user?.id;
                   return (
                     <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-xs ${isOwn ? 'bg-primary text-white rounded-tr-none' : 'bg-white border border-border text-text rounded-tl-none'}`}>
-                        <p className="whitespace-pre-wrap">{msg.message}</p>
+                        <p className="whitespace-pre-wrap">{cleanText}</p>
                         <span className={`block text-[8px] text-right mt-1.5 font-bold ${isOwn ? 'text-green-200' : 'text-gray-400'}`}>
                           {new Date(msg.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                         </span>

@@ -2,12 +2,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Package, Tags, Boxes, ShoppingCart, Calculator, 
-  MessageCircle, TrendingUp, Settings, LogOut, Users, Store, CreditCard, BarChart3 
+  MessageCircle, TrendingUp, Settings, LogOut, Users, Store, CreditCard, BarChart3, Bell, HelpCircle, AlertTriangle
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import TourGuide from '../components/TourGuide';
 import useTourStore from '../store/useTourStore';
 import { subscriptionService } from '../services/subscriptionService';
+import useNotificationStore from '../store/useNotificationStore';
 
 const DashboardLayout = () => {
   const logout = useAuthStore((state) => state.logout);
@@ -16,17 +17,24 @@ const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [subStatus, setSubStatus] = useState(null);
-  const [showTourMenu, setShowTourMenu] = useState(false);
-  const dropdownRef = useRef(null);
+
+  const [showBellMenu, setShowBellMenu] = useState(false);
+  const bellDropdownRef = useRef(null);
+
+  const { unreadChatCount, unreadOrderCount, unreadChatsList, unreadOrdersList } = useNotificationStore();
+  const totalNotifications = unreadChatCount + unreadOrderCount;
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowTourMenu(false);
+    const handleClickOutsideBell = (event) => {
+      if (bellDropdownRef.current && !bellDropdownRef.current.contains(event.target)) {
+        setShowBellMenu(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    document.addEventListener('mousedown', handleClickOutsideBell);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutsideBell);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -126,6 +134,10 @@ const DashboardLayout = () => {
                 <Users className="h-5 w-5 shrink-0" />
                 Users
               </Link>
+              <Link id="tour-admin-owners" to="/dashboard/owners" className={getLinkClass('/dashboard/owners')}>
+                <Users className="h-5 w-5 shrink-0" />
+                Owner Management
+              </Link>
               <Link id="tour-admin-stores" to="/dashboard/stores" className={getLinkClass('/dashboard/stores')}>
                 <Store className="h-5 w-5 shrink-0" />
                 Stores
@@ -158,17 +170,31 @@ const DashboardLayout = () => {
                 <Boxes className="h-5 w-5 shrink-0" />
                 Inventory
               </Link>
-              <Link id="tour-owner-orders" to="/dashboard/orders" className={getLinkClass('/dashboard/orders')}>
-                <ShoppingCart className="h-5 w-5 shrink-0" />
-                Pesanan Masuk
+              <Link id="tour-owner-orders" to="/dashboard/orders" className={`${getLinkClass('/dashboard/orders')} justify-between flex-1`}>
+                <span className="flex items-center gap-3">
+                  <ShoppingCart className="h-5 w-5 shrink-0" />
+                  Pesanan Masuk
+                </span>
+                {unreadOrderCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center animate-pulse shrink-0">
+                    {unreadOrderCount}
+                  </span>
+                )}
               </Link>
               <Link id="tour-owner-pos" to="/dashboard/transactions" className={getLinkClass('/dashboard/transactions')}>
                 <Calculator className="h-5 w-5 shrink-0" />
                 Kasir POS
               </Link>
-              <Link id="tour-owner-chat" to="/dashboard/chat" className={getLinkClass('/dashboard/chat')}>
-                <MessageCircle className="h-5 w-5 shrink-0" />
-                Chat Customer
+              <Link id="tour-owner-chat" to="/dashboard/chat" className={`${getLinkClass('/dashboard/chat')} justify-between flex-1`}>
+                <span className="flex items-center gap-3">
+                  <MessageCircle className="h-5 w-5 shrink-0" />
+                  Chat Customer
+                </span>
+                {unreadChatCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center animate-pulse shrink-0">
+                    {unreadChatCount}
+                  </span>
+                )}
               </Link>
               <Link id="tour-owner-reports" to="/dashboard/sales-history" className={getLinkClass('/dashboard/sales-history')}>
                 <TrendingUp className="h-5 w-5 shrink-0" />
@@ -182,28 +208,13 @@ const DashboardLayout = () => {
           )}
         </nav>
         <div className="p-4 border-t border-border space-y-2">
-          <div className="relative w-full" ref={dropdownRef}>
-            <button 
-              onClick={() => setShowTourMenu(!showTourMenu)}
-              className="flex w-full items-center px-4 py-2.5 text-sm font-semibold text-[#16A34A] rounded-xl hover:bg-[#F0FDF4] transition-all duration-300 gap-3 border border-[#16A34A]/25 cursor-pointer shadow-2xs"
-            >
-              <span className="text-base shrink-0">❓</span>
-              Panduan Website
-            </button>
-            {showTourMenu && (
-              <div className="absolute bottom-full left-0 mb-2 w-full bg-white border border-gray-250 rounded-xl shadow-lg py-1 z-50 animate-fade-in">
-                <button
-                  onClick={() => {
-                    setShowTourMenu(false);
-                    useTourStore.getState().triggerTour();
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-primary font-semibold transition-colors cursor-pointer"
-                >
-                  {role === 'ADMIN' ? 'Mulai Tour Admin' : 'Mulai Tour Owner'}
-                </button>
-              </div>
-            )}
-          </div>
+          <button 
+            onClick={() => useTourStore.getState().triggerTour(role)}
+            className="flex w-full items-center px-4 py-2.5 text-sm font-semibold text-[#16A34A] rounded-xl hover:bg-[#F0FDF4] transition-all duration-300 gap-3 border border-[#16A34A]/25 cursor-pointer shadow-2xs"
+          >
+            <HelpCircle className="h-5 w-5 shrink-0" />
+            Panduan Website
+          </button>
           <button onClick={handleLogout} className="flex w-full items-center px-4 py-2.5 text-sm font-bold text-red-650 rounded-xl hover:bg-red-50 transition-colors gap-3 cursor-pointer">
             <LogOut className="h-5 w-5 shrink-0" />
             Keluar
@@ -217,15 +228,98 @@ const DashboardLayout = () => {
           <div className="flex-1">
             {renderSubscriptionBadge()}
           </div>
-          <div className="flex items-center space-x-3">
-            <span className="text-sm font-semibold text-gray-700">
-              {role === 'ADMIN' ? 'Admin Dashboard' : 'Owner Dashboard'}
-            </span>
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-extrabold shadow-sm">
-              {user?.name ? user.name[0].toUpperCase() : 'U'}
+          <div className="flex items-center space-x-5">
+            {role?.toUpperCase() === 'OWNER' && (
+              <div className="relative flex items-center" ref={bellDropdownRef}>
+                <button
+                  onClick={() => setShowBellMenu(!showBellMenu)}
+                  className="p-2 text-gray-500 hover:text-primary hover:bg-gray-100 rounded-full transition-colors relative cursor-pointer"
+                  aria-label="Notifikasi"
+                >
+                  <Bell className="w-5.5 h-5.5" />
+                  {totalNotifications > 0 && (
+                    <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-[9px] font-extrabold h-4 w-4 flex items-center justify-center border-2 border-white animate-pulse">
+                      {totalNotifications}
+                    </span>
+                  )}
+                </button>
+                {showBellMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-250 rounded-xl shadow-lg py-2 z-50 animate-fade-in max-h-96 overflow-y-auto">
+                    <div className="px-4 py-2 border-b border-gray-150 font-bold text-xs text-gray-700 uppercase tracking-wider text-left">
+                      Notifikasi Baru
+                    </div>
+                    {totalNotifications === 0 ? (
+                      <div className="px-4 py-6 text-center text-xs text-gray-400">
+                        Tidak ada notifikasi baru
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {unreadChatsList.map(chat => (
+                          <div
+                            key={`bell-chat-${chat.id}`}
+                            onClick={() => {
+                              setShowBellMenu(false);
+                              navigate('/dashboard/chat');
+                            }}
+                            className="px-4 py-3 hover:bg-green-50/50 cursor-pointer transition-colors text-left"
+                          >
+                            <p className="text-xs text-gray-800">
+                              💬 Chat baru dari <span className="font-bold text-primary">{chat.customerName}</span>
+                            </p>
+                          </div>
+                        ))}
+                        {unreadOrdersList.map(order => (
+                          <div
+                            key={`bell-order-${order.id}`}
+                            onClick={() => {
+                              setShowBellMenu(false);
+                              navigate('/dashboard/orders');
+                            }}
+                            className="px-4 py-3 hover:bg-green-50/50 cursor-pointer transition-colors text-left"
+                          >
+                            <p className="text-xs text-gray-800 font-medium">
+                              🛒 Pesanan baru: <span className="font-bold text-primary">Order #{order.id}</span>
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              Dari: {order.customer?.name || 'Customer'} • Rp {order.total?.toLocaleString('id-ID')}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-semibold text-gray-700">
+                {role === 'ADMIN' ? 'Admin Dashboard' : 'Owner Dashboard'}
+              </span>
+              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-extrabold shadow-sm">
+                {user?.name ? user.name[0].toUpperCase() : 'U'}
+              </div>
             </div>
           </div>
         </header>
+        {/* EXPIRED warning banner for OWNER */}
+        {role === 'OWNER' && subStatus?.status === 'EXPIRED' && (
+          <div className="bg-red-50 border-b border-red-200 px-6 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2.5 text-red-700">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <p className="text-sm font-semibold">
+                Toko Anda sedang tidak tampil karena masa langganan telah berakhir. Silakan perpanjang langganan untuk mengaktifkan kembali toko.
+              </p>
+            </div>
+            <Link 
+              to="/dashboard/subscription"
+              className="bg-red-650 hover:bg-red-700 text-white font-bold py-1.5 px-4 rounded-xl text-xs transition-colors shadow-3xs self-start sm:self-auto"
+            >
+              Perpanjang Langganan
+            </Link>
+          </div>
+        )}
+
         <div className="flex-1 overflow-auto bg-gray-50/50">
           <Outlet />
         </div>

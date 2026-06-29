@@ -3,6 +3,8 @@ import { ShoppingBag, Calendar, Store, ArrowRight, RefreshCw, CheckCircle2, MapP
 import { orderService } from '../services/orderService';
 import { Link, useNavigate } from 'react-router-dom';
 import { getImageUrl } from '../services/api';
+import { toast } from 'react-hot-toast';
+import useNotificationStore from '../store/useNotificationStore';
 
 const CustomerOrders = () => {
   const navigate = useNavigate();
@@ -10,10 +12,33 @@ const CustomerOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    useNotificationStore.getState().resetCustomerOrderBadge();
+  }, []);
+
   const handleChatToko = (order) => {
     const storeId = order.store_id || order.store?.id;
     if (storeId) {
       navigate(`/chat?storeId=${storeId}`);
+    }
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm("Apakah Anda yakin ingin membatalkan pesanan ini?")) {
+      return;
+    }
+
+    try {
+      const response = await orderService.cancelOrderByCustomer(orderId);
+      if (response.success) {
+        toast.success("Pesanan berhasil dibatalkan");
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED' } : o));
+      } else {
+        toast.error(response.message || "Gagal membatalkan pesanan");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan saat membatalkan pesanan");
     }
   };
 
@@ -65,6 +90,7 @@ const CustomerOrders = () => {
       CONFIRMED: { bg: 'bg-purple-50 text-purple-700 border-purple-200', text: 'Diproses' },
       READY: { bg: 'bg-blue-50 text-blue-700 border-blue-200', text: 'Siap Diambil' },
       COMPLETED: { bg: 'bg-green-50 text-green-700 border-green-200', text: 'Selesai' },
+      CANCELLED: { bg: 'bg-red-50 text-red-700 border-red-200', text: 'Dibatalkan' },
     };
 
     const item = config[status] || { bg: 'bg-gray-50 text-gray-700 border-gray-200', text: status || '-' };
@@ -244,6 +270,14 @@ const CustomerOrders = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-3.5 w-full sm:w-auto justify-between sm:justify-end">
+                    {order.status === 'PENDING' && (
+                      <button
+                        onClick={() => handleCancelOrder(order.id)}
+                        className="inline-flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white font-bold text-xs py-2 px-3.5 rounded-xl transition-all shadow-xs cursor-pointer"
+                      >
+                        ❌ Batalkan Pesanan
+                      </button>
+                    )}
                     <button
                       onClick={() => handleChatToko(order)}
                       className="inline-flex items-center gap-1.5 bg-primary hover:bg-green-700 text-white font-bold text-xs py-2 px-3.5 rounded-xl transition-all shadow-xs cursor-pointer"

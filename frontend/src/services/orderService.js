@@ -72,5 +72,51 @@ export const orderService = {
       console.error('getStoreHistory API error:', error);
       return { success: false, message: error.response?.data?.message || 'Gagal memuat riwayat transaksi toko' };
     }
+  },
+
+  getUnreadCount: async () => {
+    try {
+      const response = await api.get('/orders/unread-count');
+      return response.data;
+    } catch (error) {
+      console.error('getUnreadCount API error:', error);
+      return { success: false, message: error.response?.data?.message || 'Gagal memuat unread order count' };
+    }
+  },
+
+  cancelOrderByCustomer: async (orderId) => {
+    try {
+      const response = await api.put(`/orders/${orderId}/cancel-customer`);
+      if (response.data.success) {
+        return { success: true, data: response.data.data };
+      }
+      return { success: false, message: response.data.message || 'Gagal membatalkan pesanan' };
+    } catch (error) {
+      console.error('cancelOrderByCustomer API error:', error);
+      return { success: false, message: error.response?.data?.message || 'Gagal membatalkan pesanan' };
+    }
+  },
+
+  cancelOrderByOwner: async (orderId) => {
+    try {
+      const response = await api.put(`/orders/${orderId}/cancel-owner`);
+      if (response.data.success) {
+        return { success: true, data: response.data.data };
+      }
+      return { success: false, message: response.data.message || 'Gagal membatalkan pesanan' };
+    } catch (error) {
+      console.error('cancelOrderByOwner API error:', error);
+      return { success: false, message: error.response?.data?.message || 'Gagal membatalkan pesanan' };
+    }
+  },
+
+  getCustomerUnreadCount: async () => {
+    try {
+      const response = await api.get('/orders/customer/unread-count');
+      return response.data;
+    } catch (error) {
+      console.error('getCustomerUnreadCount API error:', error);
+      return { success: false, message: error.response?.data?.message || 'Gagal memuat unread count customer' };
+    }
   }
 };

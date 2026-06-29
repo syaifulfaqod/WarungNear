@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Send, User, MessageSquare, Loader2 } from 'lucide-react';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
+import useNotificationStore from '../../store/useNotificationStore';
+import { chatService } from '../../services/chatService';
 
 const Chat = () => {
   const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const customerIdParam = searchParams.get('customerId');
+  const orderIdParam = searchParams.get('orderId');
+
   const {
     conversations,
     messages,
@@ -20,10 +27,30 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    fetchConversations();
-    // Reset active conversation on mount/unmount
-    setActiveConversationId(null);
-  }, []);
+    const initChat = async () => {
+      await fetchConversations();
+      
+      if (customerIdParam || orderIdParam) {
+        try {
+          const params = {};
+          if (customerIdParam) params.customerId = customerIdParam;
+          if (orderIdParam) params.orderId = orderIdParam;
+
+          const res = await chatService.getOrCreateConversation(params);
+          if (res.success && res.data) {
+            await fetchConversations();
+            setActiveConversationId(res.data.id);
+          }
+        } catch (err) {
+          console.error("Error initializing owner chat:", err);
+        }
+      } else {
+        setActiveConversationId(null);
+      }
+      useNotificationStore.getState().resetChatBadge();
+    };
+    initChat();
+  }, [customerIdParam, orderIdParam]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,7 +91,8 @@ const Chat = () => {
           ) : (
             conversations.map(conv => {
               const isActive = conv.id === activeConversationId;
-              const lastMsg = conv.messages?.[0]?.message || 'Mulai obrolan...';
+              const rawLastMsg = conv.messages?.[0]?.message || 'Mulai obrolan...';
+              const lastMsg = rawLastMsg.replace(/^\[READY_NOTIFICATION_ORDER_\d+\]/, '');
               const lastTime = conv.messages?.[0]?.createdAt
                 ? new Date(conv.messages[0].createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
                 : '';
@@ -119,11 +147,32 @@ const Chat = () => {
             {/* Messages box */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.map(msg => {
+                const cleanText = msg.message.replace(/^\[READY_NOTIFICATION_ORDER_\d+\]/, '');
+
+                if (msg.is_system) {
+                  return (
+                    <div key={msg.id} className="flex justify-center my-4">
+                      <div className="bg-[#EFF6FF] border border-[#BFDBFE] text-[#1E3A8A] rounded-2xl p-4 max-w-[85%] text-xs shadow-3xs flex flex-col gap-2 relative">
+                        <div className="flex gap-2.5 items-start">
+                          <span className="text-sm shrink-0">ℹ️</span>
+                          <div className="space-y-1">
+                            <span className="font-extrabold text-[10px] text-[#2563EB] tracking-wider uppercase block">Pesan Otomatis Sistem</span>
+                            <p className="whitespace-pre-wrap leading-relaxed font-semibold text-[#1E3A8A]">{cleanText}</p>
+                          </div>
+                        </div>
+                        <span className="block text-[8px] text-right text-[#60A5FA] font-bold mt-1">
+                          {new Date(msg.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const isOwn = msg.sender_id === user?.id;
                 return (
                   <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[60%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-xs ${isOwn ? 'bg-primary text-white rounded-tr-none' : 'bg-white border border-border text-text rounded-tl-none'}`}>
-                      <p>{msg.message}</p>
+                      <p>{cleanText}</p>
                       <span className={`block text-[9px] text-right mt-1.5 font-bold ${isOwn ? 'text-green-150' : 'text-gray-400'}`}>
                         {new Date(msg.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </span>

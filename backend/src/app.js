@@ -17,6 +17,8 @@ import categoryRoutes from './routes/categoryRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import storeImageRoutes from './routes/storeImageRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,7 +78,9 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/store/images', storeImageRoutes);
 app.use('/api', subscriptionRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Enhanced Health check with Prisma Database connectivity check
 app.get('/api/health', async (req, res) => {

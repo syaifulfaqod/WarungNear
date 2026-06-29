@@ -60,7 +60,9 @@ export const storeService = {
             openTime: openTime,
             closeTime: closeTime,
             productCount: item.availableProducts,
-            image: s.image || 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+            image: (s.images && s.images.find(img => img.is_primary))
+              ? `${import.meta.env.VITE_API_URL.replace('/api', '')}${s.images.find(img => img.is_primary).image_url}`
+              : 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
           };
         });
         
@@ -126,7 +128,10 @@ export const storeService = {
           openTime: openTime,
           closeTime: closeTime,
           productCount: s.products?.length || 0,
-          image: s.image || 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+          image: (s.images && s.images.find(img => img.is_primary))
+            ? `${import.meta.env.VITE_API_URL.replace('/api', '')}${s.images.find(img => img.is_primary).image_url}`
+            : 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+          images: s.images || [],
           products: (s.products || []).map(p => {
             const stock = p.stock;
             let status = 'Tersedia';

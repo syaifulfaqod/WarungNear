@@ -22,6 +22,9 @@ model User {
   email         String         @unique
   password      String
   role          Role           @default(CUSTOMER)
+  status        String         @default("ACTIVE")
+  is_active     Boolean        @default(true)
+  suspend_reason String?
   stores        Store[]
   orders        Order[]        @relation("CustomerOrders")
   conversations Conversation[] @relation("CustomerConversations")
@@ -49,6 +52,7 @@ model Store {
   orders        Order[]
   categories    Category[]
   conversations Conversation[]
+  images        StoreImage[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -101,20 +105,23 @@ enum OrderStatus {
   CONFIRMED
   READY
   COMPLETED
+  CANCELLED
 }
 
 model Order {
-  id            Int            @id @default(autoincrement())
-  customer_id   Int
-  customer      User           @relation("CustomerOrders", fields: [customer_id], references: [id], onDelete: Cascade)
-  store_id      Int
-  store         Store          @relation(fields: [store_id], references: [id], onDelete: Cascade)
-  status        OrderStatus    @default(PENDING)
-  total         Float
-  items         OrderItem[]
-  conversations Conversation[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id               Int            @id @default(autoincrement())
+  customer_id      Int
+  customer         User           @relation("CustomerOrders", fields: [customer_id], references: [id], onDelete: Cascade)
+  store_id         Int
+  store            Store          @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  status           OrderStatus    @default(PENDING)
+  total            Float
+  items            OrderItem[]
+  conversations    Conversation[]
+  is_seen          Boolean        @default(false)
+  customer_is_seen Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 }
 
 model OrderItem {
@@ -161,6 +168,11 @@ model Message {
   sender_id       Int
   sender          User         @relation("SenderMessages", fields: [sender_id], references: [id], onDelete: Cascade)
   message         String
+  is_read         Boolean      @default(false)
+  customer_is_read Boolean      @default(false)
+  is_system       Boolean      @default(false)
+  latitude        Float?
+  longitude       Float?
   createdAt       DateTime     @default(now())
 }
 
@@ -222,4 +234,13 @@ model SubscriptionHistory {
   expired_date_after  DateTime?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+}
+
+model StoreImage {
+  id         Int      @id @default(autoincrement())
+  store_id   Int
+  store      Store    @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  image_url  String
+  is_primary Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }

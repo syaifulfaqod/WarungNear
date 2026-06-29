@@ -68,6 +68,11 @@ export const loginUser = async (req, res) => {
     });
     
     if (user && (await bcrypt.compare(validatedData.password, user.password))) {
+      if (user.status === 'SUSPENDED' || !user.is_active) {
+        const msg = user.suspend_reason || "Akun Anda telah dinonaktifkan oleh Admin WarungNear. Silakan hubungi admin untuk informasi lebih lanjut.";
+        return res.status(403).json(formatResponse(false, msg));
+      }
+
       res.json(formatResponse(true, {
         token: generateToken(user.id),
         user: {

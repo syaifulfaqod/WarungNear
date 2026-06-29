@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, RefreshCw, CheckCircle, PackageOpen, Hourglass, ArrowRight, User } from 'lucide-react';
 import { orderService } from '../../services/orderService';
 import { toast } from 'react-hot-toast';
 import { getImageUrl } from '../../services/api';
+import useNotificationStore from '../../store/useNotificationStore';
 
 const OwnerOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
@@ -30,6 +33,7 @@ const OwnerOrders = () => {
 
   useEffect(() => {
     fetchOrders();
+    useNotificationStore.getState().resetOrderBadge();
   }, []);
 
   // Listen to real-time new orders
@@ -51,6 +55,46 @@ const OwnerOrders = () => {
       window.removeEventListener('order:new', handleNewOrder);
     };
   }, []);
+
+  // Listen to real-time status updates (e.g. customer cancelling order)
+  useEffect(() => {
+    const handleOrderUpdate = (e) => {
+      const updatedOrder = e.detail;
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === updatedOrder.id ? { ...order, status: updatedOrder.status } : order
+        )
+      );
+    };
+
+    window.addEventListener('order:update', handleOrderUpdate);
+    return () => {
+      window.removeEventListener('order:update', handleOrderUpdate);
+    };
+  }, []);
+
+  const handleChatCustomer = (order) => {
+    navigate(`/dashboard/chat?customerId=${order.customer_id}&orderId=${order.id}`);
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm("Apakah Anda yakin ingin membatalkan pesanan ini?")) {
+      return;
+    }
+
+    try {
+      const response = await orderService.cancelOrderByOwner(orderId);
+      if (response.success) {
+        toast.success("Pesanan berhasil dibatalkan");
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED' } : o));
+      } else {
+        toast.error(response.message || "Gagal membatalkan pesanan");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan saat membatalkan pesanan");
+    }
+  };
 
   const handleUpdateStatus = async (orderId, currentStatus) => {
     const statusSequence = {
@@ -89,6 +133,7 @@ const OwnerOrders = () => {
       CONFIRMED: { label: 'Diproses/Dikonfirmasi', color: 'bg-purple-100 text-purple-800' },
       READY: { label: 'Siap Diambil', color: 'bg-blue-100 text-blue-800' },
       COMPLETED: { label: 'Selesai', color: 'bg-green-100 text-green-800' },
+      CANCELLED: { label: 'Dibatalkan', color: 'bg-red-100 text-red-800' },
     };
     return labels[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
   };
@@ -133,6 +178,12 @@ const OwnerOrders = () => {
             Selesai Diambil
             <CheckCircle className="w-3.5 h-3.5" />
           </button>
+        );
+      case 'CANCELLED':
+        return (
+          <span className="text-red-500 text-xs font-semibold flex items-center justify-center gap-1">
+            ❌ Pesanan Dibatalkan
+          </span>
         );
       case 'COMPLETED':
       default:
@@ -274,9 +325,25 @@ const OwnerOrders = () => {
                       Rp {order.total.toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <div className="border-t border-slate-200 pt-4">
+                  <div className="border-t border-slate-200 pt-4 space-y-2">
                     <span className="text-xs text-gray-400 font-semibold block mb-2">Aksi Status Pesanan</span>
                     {getActionButton(order)}
+                    
+                    {order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+                      <button
+                        onClick={() => handleCancelOrder(order.id)}
+                        className="w-full mt-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        ❌ Batalkan Pesanan
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleChatCustomer(order)}
+                      className="w-full bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#2E7D32] font-bold py-2 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1 cursor-pointer border border-[#A5D6A7]"
+                    >
+                      💬 Chat Customer
+                    </button>
                   </div>
                 </div>
               </div>

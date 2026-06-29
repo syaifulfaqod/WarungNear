@@ -1,26 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, LogOut, LayoutDashboard, History, User, MessageSquare } from 'lucide-react';
+import { ShoppingCart, LogOut, LayoutDashboard, History, User, MessageSquare, HelpCircle } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useCartStore from '../store/useCartStore';
 import useTourStore from '../store/useTourStore';
+import useNotificationStore from '../store/useNotificationStore';
 
 const Navbar = () => {
-  const [showTourMenu, setShowTourMenu] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowTourMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
   const navigate = useNavigate();
   const { isAuthenticated, role, user, logout } = useAuthStore();
   const { cartItems } = useCartStore();
+  const { customerUnreadChatCount, customerUnreadOrderCount } = useNotificationStore();
 
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -67,35 +57,30 @@ const Navbar = () => {
               <div className="flex items-center gap-4">
                 {role?.toUpperCase() === 'CUSTOMER' && (
                   <>
-                    <div className="relative" ref={dropdownRef}>
-                      <button 
-                        onClick={() => setShowTourMenu(!showTourMenu)}
-                        className="text-[#16A34A] hover:text-[#15803D] flex items-center gap-1.5 text-xs font-bold transition-all duration-300 cursor-pointer bg-[#F0FDF4] px-2.5 py-1.5 rounded-lg border border-[#16A34A]/25 shadow-2xs"
-                      >
-                        <span className="text-sm shrink-0">❓</span>
-                        <span className="hidden sm:inline">Panduan Website</span>
-                      </button>
-                      {showTourMenu && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-250 rounded-xl shadow-lg py-1 z-50 animate-fade-in">
-                          <button
-                            onClick={() => {
-                              setShowTourMenu(false);
-                              useTourStore.getState().triggerTour();
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-primary font-semibold transition-colors cursor-pointer"
-                          >
-                            Mulai Tour Customer
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button 
+                      onClick={() => useTourStore.getState().triggerTour('CUSTOMER')}
+                      className="text-[#16A34A] hover:text-[#15803D] flex items-center gap-1.5 text-xs font-bold transition-all duration-300 cursor-pointer bg-[#F0FDF4] px-2.5 py-1.5 rounded-lg border border-[#16A34A]/25 shadow-2xs"
+                    >
+                      <HelpCircle className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">Panduan Website</span>
+                    </button>
                     <Link id="tour-orders-link" to="/orders" className="text-gray-500 hover:text-primary flex items-center gap-1.5 text-sm font-semibold transition-colors">
                       <History className="w-4 h-4" />
                       <span className="hidden sm:inline">Pesanan Saya</span>
+                      {customerUnreadOrderCount > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[16px] h-4 leading-none">
+                          {customerUnreadOrderCount}
+                        </span>
+                      )}
                     </Link>
                     <Link id="tour-chat-link" to="/chat" className="text-gray-500 hover:text-primary flex items-center gap-1.5 text-sm font-semibold transition-colors">
                       <MessageSquare className="w-4 h-4" />
                       <span className="hidden sm:inline">Chat</span>
+                      {customerUnreadChatCount > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[16px] h-4 leading-none">
+                          {customerUnreadChatCount}
+                        </span>
+                      )}
                     </Link>
                   </>
                 )}

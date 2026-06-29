@@ -120,7 +120,12 @@ export const emitNewOrder = (storeId, order) => {
 export const emitOrderUpdate = (userId, order) => {
   if (io) {
     io.to(`user:${userId}`).emit('order:update', order);
-    console.log(`📢 Emitted order:update -> User Room user:${userId}`);
+    io.to(`user:${userId}`).emit('order:update-customer', {
+      customerId: userId,
+      orderId: order.id,
+      status: order.status
+    });
+    console.log(`📢 Emitted order:update & order:update-customer -> User Room user:${userId}`);
   }
 };
 
@@ -137,6 +142,61 @@ export const emitChatMessage = (storeId, customerId, message) => {
     io.to(`user:${customerId}`).emit('chat:new', message);
     io.to(`user:${customerId}`).emit('chat:update', message);
     io.to(`user:${customerId}`).emit('chat:message', message);
+
+    // If sender is NOT customer (i.e. owner is sending), emit chat:new-customer to customer
+    if (message.sender_id !== customerId) {
+      io.to(`user:${customerId}`).emit('chat:new-customer', {
+        customerId,
+        conversationId: message.conversation_id,
+        message: message.message
+      });
+    }
     console.log(`📢 Emitted chat:new / chat:update -> Store: ${storeId}, Customer: ${customerId}`);
+  }
+};
+
+/**
+ * Emit order cancellation events to both customer room and store owner room
+ */
+export const emitOrderCancelled = (storeId, customerId, order, cancelledBy) => {
+  if (io) {
+    const payload = {
+      orderId: order.id,
+      status: 'CANCELLED',
+      cancelledBy
+    };
+    
+    // Emit specific order:cancelled event
+    io.to(`store:${storeId}`).emit('order:cancelled', payload);
+    io.to(`user:${customerId}`).emit('order:cancelled', payload);
+    
+    // Also emit order:update to keep standard flows real-time
+    io.to(`store:${storeId}`).emit('order:update', order);
+    io.to(`user:${customerId}`).emit('order:update', order);
+    
+    // If cancelled by OWNER, emit order:update-customer to customer
+    if (cancelledBy === 'OWNER') {
+      io.to(`user:${customerId}`).emit('order:update-customer', {
+        customerId,
+        orderId: order.id,
+        status: 'CANCELLED'
+      });
+    }
+
+    console.log(`📢 Emitted order:cancelled & order:update -> Store: ${storeId}, Customer: ${customerId}`, payload);
+  }
+};
+
+/**
+ * Emit owner suspension alerts to their user socket room
+ */
+export const emitSuspendOwner = (ownerId, message, status) => {
+  if (io) {
+    io.to(`user:${ownerId}`).emit('admin:suspend-owner', {
+      ownerId,
+      message,
+      status
+    });
+    console.log(`📢 Emitted admin:suspend-owner -> Owner: ${ownerId}, Status: ${status}`);
   }
 };

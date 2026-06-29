@@ -45,12 +45,6 @@ const Login = () => {
     }
   };
 
-  // Keep a helper for quick test testing
-  const handleQuickLogin = async (role) => {
-    setEmail(role === 'owner' ? 'budi@warungnear.com' : 'admin@warungnear.com');
-    setPassword('password123');
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-md p-8 border border-border">
@@ -106,25 +100,6 @@ const Login = () => {
           <Link to="/register" className="text-primary font-semibold hover:underline">
             Daftar di sini
           </Link>
-        </div>
-
-        {/* Quick Helper for Developers */}
-        <div className="mt-8 pt-6 border-t border-border">
-          <p className="text-xs text-gray-400 text-center font-medium mb-3">Bantuan Uji Cepat (Isi Form Otomatis):</p>
-          <div className="flex gap-2 justify-center">
-            <button
-              onClick={() => handleQuickLogin('owner')}
-              className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded transition-colors"
-            >
-              Isi Owner
-            </button>
-            <button
-              onClick={() => handleQuickLogin('admin')}
-              className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded transition-colors"
-            >
-              Isi Admin
-            </button>
-          </div>
         </div>
       </div>
     </div>
