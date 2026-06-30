@@ -1,0 +1,5 @@
+[
+  { "id": 1, "name": "Admin WarungNear", "email": "admin@warungnear.com", "role": "ADMIN", "is_active": true, "status": "ACTIVE" },
+  { "id": 2, "name": "Budi Owner", "email": "owner@warungnear.com", "role": "OWNER", "is_active": true, "status": "ACTIVE" },
+  { "id": 3, "name": "Syaiful Customer", "email": "customer@warungnear.com", "role": "CUSTOMER", "is_active": true, "status": "ACTIVE" }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "Toko Berkah Jaya",
+    "address": "Jl. Raya Darmo No. 45, Surabaya",
+    "latitude": -7.2906,
+    "longitude": 112.7384,
+    "open_time": "07:00",
+    "close_time": "22:00",
+    "phoneNumber": "081234567890",
+    "owner_id": 2,
+    "isActive": true,
+    "images": [
+      { "id": 1, "store_id": 1, "image_url": "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800", "is_primary": true }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Warung Makmur Sejahtera",
+    "address": "Jl. Gubeng Kertajaya No. 12, Surabaya",
+    "latitude": -7.2756,
+    "longitude": 112.7521,
+    "open_time": "06:00",
+    "close_time": "23:00",
+    "phoneNumber": "089876543210",
+    "owner_id": 2,
+    "isActive": true,
+    "images": [
+      { "id": 2, "store_id": 2, "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800", "is_primary": true }
+    ]
+  }
+]

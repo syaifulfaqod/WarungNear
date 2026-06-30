@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+
+@layer base {
+  body {
+    @apply bg-background text-text font-poppins;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white font-medium py-2 px-4 rounded-lg hover:bg-green-700 transition-colors focus:ring-4 focus:ring-green-300 outline-none;
+  }
+  .btn-secondary {
+    @apply bg-white text-primary border border-primary font-medium py-2 px-4 rounded-lg hover:bg-green-50 transition-colors focus:ring-4 focus:ring-green-100 outline-none;
+  }
+  .input-field {
+    @apply w-full border border-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-border p-4;
+  }
+}
+
+.product-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
