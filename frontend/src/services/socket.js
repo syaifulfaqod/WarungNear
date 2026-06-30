@@ -5,8 +5,8 @@ let socket = null;
 export const initiateSocketConnection = (token) => {
   if (socket) return socket;
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  const socketUrl = apiUrl.replace('/api', '');
+  const socketUrl = import.meta.env.VITE_SOCKET_URL || 
+                    (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000');
 
   socket = io(socketUrl, {
     auth: {

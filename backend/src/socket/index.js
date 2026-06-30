@@ -4,11 +4,12 @@ import prisma from '../config/db.js';
 
 let io = null;
 
-export const initSocket = (server) => {
+export const initSocket = (server, allowedOrigins = []) => {
   io = new Server(server, {
     cors: {
-      origin: '*', // Allow all origins for simplicity in dev/prod, or we can use allowedOrigins.
-      methods: ['GET', 'POST', 'PUT']
+      origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+      methods: ['GET', 'POST', 'PUT'],
+      credentials: true
     }
   });
 

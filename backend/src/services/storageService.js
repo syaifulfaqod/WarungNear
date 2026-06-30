@@ -5,8 +5,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const uploadDir = path.join(__dirname, '../../uploads/products');
-const uploadStoresDir = path.join(__dirname, '../../uploads/stores');
+const baseUploadDir = process.env.UPLOAD_DIR 
+  ? path.resolve(process.env.UPLOAD_DIR) 
+  : path.join(__dirname, '../../uploads');
+
+const uploadDir = path.join(baseUploadDir, 'products');
+const uploadStoresDir = path.join(baseUploadDir, 'stores');
 
 // Ensure upload directories exist on startup
 if (!fs.existsSync(uploadDir)) {

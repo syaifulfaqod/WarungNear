@@ -8,7 +8,11 @@ import { formatResponse } from '../utils/response.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const uploadDir = path.join(__dirname, '../../uploads/payments');
+const baseUploadDir = process.env.UPLOAD_DIR 
+  ? path.resolve(process.env.UPLOAD_DIR) 
+  : path.join(__dirname, '../../uploads');
+
+const uploadDir = path.join(baseUploadDir, 'payments');
 
 // Ensure payments directory exists
 if (!fs.existsSync(uploadDir)) {

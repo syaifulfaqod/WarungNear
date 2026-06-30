@@ -66,23 +66,13 @@ app.use(cors({
 app.use(express.json());
 
 // Serve static uploads folder
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const baseUploadDir = process.env.UPLOAD_DIR 
+  ? path.resolve(process.env.UPLOAD_DIR) 
+  : path.join(__dirname, '../uploads');
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/stores', storeRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/store/images', storeImageRoutes);
-app.use('/api', subscriptionRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/uploads', express.static(baseUploadDir));
 
-// Enhanced Health check with Prisma Database connectivity check
+// Health check with Prisma Database connectivity check
 app.get('/api/health', async (req, res) => {
   let dbStatus = 'disconnected';
   try {
@@ -99,6 +89,20 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/stores', storeRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/store/images', storeImageRoutes);
+app.use('/api', subscriptionRoutes);
+app.use('/api/admin', adminRoutes);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
@@ -111,7 +115,7 @@ app.use((err, req, res, next) => {
 });
 
 const server = http.createServer(app);
-initSocket(server);
+initSocket(server, allowedOrigins);
 
 server.listen(PORT, () => {
   console.log(`🚀 WarungNear API running on http://localhost:${PORT}`);
